@@ -17,3 +17,132 @@ the investments needed to generate proper calibrated data.
 I now unveil to you, my LIBS-inator:
 """
 
+#Importation of important modules
+from tkinter import *
+from PIL import Image, ImageTk
+from tkinter import filedialog
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import sys 
+import random
+import os
+import glob
+
+from PIL import Image as IM
+from PIL import ImageDraw as ID
+from PIL import ImageFont as IF
+
+
+#BEGIN CODE
+
+
+#Get Current directory, set as cd.
+cd = os.getcwd()
+
+#empty save directory
+savedir = ''
+
+#Condition Checker. 0 if not met, 1 if met
+CC = [0,0,0,0]
+
+'''
+1. directory chosen?
+2. save directory chosen?
+3. Target WL?
+4. WL width?
+'''
+
+#establish root for tkinter
+root = Tk()
+root.geometry("1440x900")
+root.title('LIBS-inator')
+
+#Create Frames
+selectionframe = Frame(root)
+wavelengthframe = Frame(root)
+samplesframe = Frame(root)
+resultsframe = Frame(root)
+
+
+#Place Frames
+selectionframe.grid(row=0, column=0)
+wavelengthframe.grid(row=0, column=1)
+samplesframe.grid(row=1, column=0)
+resultsframe.grid(row=1, column=1)
+
+'''
+Start commands here
+'''
+
+#Browse to Choose Directory:
+def ChooseDirectory():
+    
+    #global variables
+    global directory
+    global files
+    
+    directory = filedialog.askopenfilename(title="Where are the files")
+    
+    #if user cancels then do nothing
+    if directory == '':
+        pass
+    
+    #otherwise proceed
+    else:
+        
+        #creates a list with all the file names in the selected directory
+        files = os.listdir('dir_path')
+    
+
+def Average():
+    
+    return
+
+def Variance():
+    
+    return
+
+def AvgAvg():
+    
+    return
+
+def VarAvg():
+    
+    return
+
+def AvgVar():
+    
+    return
+    
+def VarVar():
+    
+    return
+
+sheet = pd.read_csv('/Users/David 1/Desktop/PEG/PEG 1a(m).a_20221007_061800_AM_AverageSpectrum.csv')
+folder = '/Users/David 1/Desktop/PEG/'
+def Range(wl):
+    values = []
+    
+    for j in range(len(os.listdir(folder))):
+        total = 0
+        sheet = pd.read_csv(folder+os.listdir(folder)[j])
+        for i in range(len(sheet)):
+            if sheet['wavelength'][i] >= wl-0.5 and sheet['wavelength'][i] <= wl+0.5:
+                total = total + sheet['intensity'][i]
+        values.append(total)
+    print(values)
+    return(values)
+    
+def Averagee(wl):
+    values = Range(wl)
+    avg = sum(values)/len(values)
+    var = sum((i-avg)**2 for i in values) / len(values)
+    print(avg)
+    print(max(values))
+    print(min(values))
+    print(var)
+
+
+#establishes the mainloop of the tkinter root
+#root.mainloop()
