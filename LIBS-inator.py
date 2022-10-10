@@ -21,6 +21,7 @@ I now unveil to you, my LIBS-inator:
 from tkinter import *
 from PIL import Image, ImageTk
 from tkinter import filedialog
+from tkinter import ttk
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -28,6 +29,7 @@ import sys
 import random
 import os
 import glob
+import statistics
 
 from PIL import Image as IM
 from PIL import ImageDraw as ID
@@ -60,14 +62,14 @@ root.title('LIBS-inator')
 
 #Create Frames
 selectionframe = Frame(root)
-wavelengthframe = Frame(root)
+elementframe = Frame(root)
 samplesframe = Frame(root)
 resultsframe = Frame(root)
 
 
 #Place Frames
 selectionframe.grid(row=0, column=0)
-wavelengthframe.grid(row=0, column=1)
+elementframe.grid(row=0, column=1)
 samplesframe.grid(row=1, column=0)
 resultsframe.grid(row=1, column=1)
 
@@ -81,8 +83,10 @@ def ChooseDirectory():
     #global variables
     global directory
     global files
+    global elements
+    global element_menu
     
-    directory = filedialog.askopenfilename(title="Where are the files")
+    directory = filedialog.askdirectory(title="Where are the files",initialdir=cd)
     
     #if user cancels then do nothing
     if directory == '':
@@ -92,57 +96,324 @@ def ChooseDirectory():
     else:
         
         #creates a list with all the file names in the selected directory
-        files = os.listdir('dir_path')
+        files = os.listdir(directory)
+        files.sort()
+        
+    #Selects just the name of the folder, not the whole directory name
+    dirname = Path(directory).name
+    
+    #displays the condensed filename as a label.     
+    dir_label = Label(selectionframe, text='Selected Directory: ' +dirname)
+    dir_label.grid(row=1, column=0, columnspan=2)
+    
+    #creates a sorted list of element names
+    
+    #opens the first directory
+    firstfile = pd.read_csv(directory+'/'+files[0])
+    
+    #creates a list out of the fist column
+    elements = list(firstfile["Element"])
+    elements.sort()
+    
+    #updates the element_menu
+    element_menu['state']=NORMAL
+    element_menu.grid_forget()
+    index_var.set('Select Element')
+    element_menu = OptionMenu(elementframe, index_var, *elements, command=selectElement)
+    element_menu.grid(row=0, column=1, columnspan=2)
     
 
-def Average():
+#Computes Statistics of Interest
+def Stats():
     
+    #global variables
+    global directory
+    global files
+    global max_label
+    global min_label
+    global avg_label
+    global var_label
+    global SD_label
+    global select
+    global res_tree
+    
+    #refreshes the files list
+    files = os.listdir(directory)
+    files.sort()
+    
+    #empty filter list
+    tobedel = []
+    
+    #check filter
+    if fil_var.get() in ("f", "m", "q", "b"):
+        
+        #if filter not found, mark to be removed from list
+        for i in range(len(files)):
+            if "("+fil_var.get()+")" not in files[i]:
+                tobedel.append(files[i])
+        #removing from files list
+        for i in range(len(tobedel)):
+            files.remove(tobedel[i])
+            
+    #Creates list of the RA values of the desired element
+    RA = []
+    
+    #opens each csv individually
+    for i in range(len(files)):
+        
+        #creates a pandas data frame for each
+        data = pd.read_csv(directory+'/'+files[i])
+
+        #For each csv, get the value of the desired element
+        for j in range(len(data)):
+            if data["Element"][j] == select:
+                RA.append(float(data["RA"][j]))
+                
+    #updates Max label
+    max_label.grid_forget()
+    max_label = Label(samplesframe, text="Maximum: " + str(max(RA)))
+    max_label.grid(row=0, column=1)
+    
+    #updates Min label
+    min_label.grid_forget()
+    min_label = Label(samplesframe, text="Minimum: " + str(min(RA)))
+    min_label.grid(row=1, column=1)
+    
+    #updates avg label
+    avg_label.grid_forget()
+    min_label = Label(samplesframe, text="Average: " + str(statistics.mean(RA))[0:5])
+    min_label.grid(row=2, column=1)
+    
+    #updates var label
+    var_label.grid_forget()
+    var_label = Label(samplesframe, text= "Variance: " + str(statistics.variance(RA))[0:5])
+    var_label.grid(row=3, column=1)
+    
+    #updates SD label
+    SD_label.grid_forget()
+    SD_label = Label(samplesframe, text = "Standard Deviation: " + str(statistics.stdev(RA))[0:5])
+    SD_label.grid(row=4, column=1)
+    
+    #empty complex lists
+    samlist = []
+    RAlist = []
+    Lklist = []
+    
+    #see if every sample name already is counted or not
+    for i in range(len(files)):
+        
+        checkvar = ''
+        for j in range(len(files[i])):
+            
+            #limits just to the underscore
+            if files[i][j] != "_":
+                checkvar = checkvar + files[i][j]
+            if files[i][j] == "_":
+                break
+        
+        #if not in sample list, add it
+        if checkvar not in samlist:
+            samlist.append(checkvar)
+            
+    #Creates empty lists of lists for RA and Likelihood of each sample    
+    for i in range(len(samlist)):
+        RAlist.append([])
+        Lklist.append([])
+        
+        #For every file in the folder check to see which sample it corresponds to
+        for j in range(len(files)):
+            if samlist[i] in files[j]:
+                tempfile = pd.read_csv(directory+'/'+files[j])
+                
+                #add the values of that test to its corresponding sample in the sample lists
+                for k in range(len(tempfile["Element"])):
+                    if tempfile['Element'][k] == select:
+                        RAlist[i].append(float(tempfile["RA"][k]))
+                        Lklist[i].append(float(tempfile['Likelihood'][k]))
+    
+     #resets the Treeview
+    for item in res_tree.get_children():
+        res_tree.delete(item)
+    
+    #starts the index at 0
+    index=0
+    iid=0
+    
+    #updates the Treeview
+    for i in range(len(samlist)):
+        res_tree.insert(parent='', index = index, iid= iid, text='', 
+                                values = (samlist[i],
+                                          str(statistics.mean(RAlist[i]))[0:5],
+                                          str(statistics.stdev(RAlist[i]))[0:5],
+                                          str(statistics.mean(Lklist[i]))[0:5],
+                                          str(statistics.stdev(Lklist[i]))[0:5]))
+                                    
+        res_tree.grid(row=0,column=0)
+                
+        #counts up the index
+        index = index+1
+        iid = iid+1
     return
 
-def Variance():
+#updates program depeneding on the selected element
+def selectElement(selection):
     
+    #global variables
+    global sam_tree
+    global files
+    global select
+    
+    #refreshes the files list
+    files = os.listdir(directory)
+    files.sort()
+    
+    #empty filter list
+    tobedel = []
+    
+    #check filter
+    if fil_var.get() in ("f", "m", "q", "b"):
+        
+        #if filter not found, mark to be removed from list
+        for i in range(len(files)):
+            if "("+fil_var.get()+")" not in files[i]:
+                tobedel.append(files[i])
+        #removing from files list
+        for i in range(len(tobedel)):
+            files.remove(tobedel[i])
+
+    #selection variable
+    select = selection
+    
+    #starts the index at 0
+    index=0
+    iid=0
+    
+    #resets the Treeview
+    for item in sam_tree.get_children():
+      sam_tree.delete(item)
+    
+    #opens each csv individually
+    for i in range(len(files)):
+        
+        #creates a pandas data frame for each
+        data = pd.read_csv(directory+'/'+files[i])
+
+        #For each csv, get the values of the desired element
+        for j in range(len(data)):
+            if data["Element"][j] == selection:
+                
+                #updates the Treeview
+                sam_tree.insert(parent='', index = index, iid= iid, text='', 
+                                values = (files[i],data["RA"][j],data['Likelihood'][j]))
+                sam_tree.grid(row=0,column=0)
+                
+                #counts up the index
+                index = index+1
+                iid = iid+1
+    
+    #enables the Test Button
+    test_btn['state'] = NORMAL
     return
 
-def AvgAvg():
-    
-    return
+'''Widgets for selection frame'''
+#Create Labels in selection frame
+ss_label = Label(selectionframe, text="Select Directory:")
+dir_label = Label(selectionframe, text='')
 
-def VarAvg():
-    
-    return
+#Create Buttons in selection frame
+ss_btn = Button(selectionframe, text= "Browse", command = ChooseDirectory)
 
-def AvgVar():
-    
-    return
-    
-def VarVar():
-    
-    return
+#Place Labels in selection frame
+ss_label.grid(row=0, column=0)
+dir_label.grid(row=1, column=0, columnspan=2)
 
-sheet = pd.read_csv('/Users/David 1/Desktop/PEG/PEG 1a(m).a_20221007_061800_AM_AverageSpectrum.csv')
-folder = '/Users/David 1/Desktop/PEG/'
-def Range(wl):
-    values = []
+#Place Buttons selection frame
+ss_btn.grid(row=0, column=1)
+
+
+'''Widgets for element frame'''
+#Create Labels in element frame
+interest_label = Label(elementframe, text="Element of Interest:")
+filter_label = Label(elementframe, text="Filter:")
+filopt_label = Label(elementframe, text="m,f,b,q")
+
+#creates Buttons in element frame
+test_btn = Button(elementframe, text="Test", command= Stats)
+
+#creates filter in element frame
+fil_var = StringVar()
+fil_var.set('')
+fil_box = Entry(elementframe, textvariable = fil_var, width=2)
+
+#creates Option Menus in element frame
+index_var = StringVar()
+index_var.set('Choose a Directory first')
+elements = []
+element_menu = OptionMenu(elementframe, index_var, index_var, *elements, command=selectElement)
     
-    for j in range(len(os.listdir(folder))):
-        total = 0
-        sheet = pd.read_csv(folder+os.listdir(folder)[j])
-        for i in range(len(sheet)):
-            if sheet['wavelength'][i] >= wl-0.5 and sheet['wavelength'][i] <= wl+0.5:
-                total = total + sheet['intensity'][i]
-        values.append(total)
-    print(values)
-    return(values)
-    
-def Averagee(wl):
-    values = Range(wl)
-    avg = sum(values)/len(values)
-    var = sum((i-avg)**2 for i in values) / len(values)
-    print(avg)
-    print(max(values))
-    print(min(values))
-    print(var)
+#places Labels in element frame
+interest_label.grid(row=0 , column=0)
+filter_label.grid(row=1 , column=0)
+filopt_label.grid(row=1 , column=2)
+
+#places Buttons in element frame
+test_btn.grid(row=2,column=0, columnspan = 4)
+test_btn['state']=DISABLED
+
+#places Filter in element frame
+fil_box.grid(row=1, column=1)
+
+#places Option Menus in element frame
+element_menu.grid(row=0, column=1, columnspan=2)
+element_menu['state'] = DISABLED
+
+'''Widgets for samples frame'''
+#Creates Labels in samples frame
+max_label = Label(samplesframe, text="Max:")
+min_label = Label(samplesframe, text="Min:")
+avg_label = Label(samplesframe, text="Average:")
+var_label = Label(samplesframe, text="Variance:")
+SD_label = Label(samplesframe, text="Standard Deviation:")
+
+
+#Places Labels in samples frame
+max_label.grid(row=0, column=1)
+min_label.grid(row=1, column=1)
+avg_label.grid(row=2, column=1)
+var_label.grid(row=3, column=1)
+SD_label.grid(row=4, column=1)
+
+#Tree View Headache
+columns = ["File","RA","Likelihood"]
+sam_tree = ttk.Treeview(samplesframe, columns=columns)
+sam_tree.column('#0', width=0, stretch=NO)
+sam_tree.column('File', anchor=CENTER, width=200)
+sam_tree.column('RA', anchor=CENTER, width=80)
+sam_tree.column('Likelihood', anchor=CENTER, width=80)
+sam_tree.heading('#0', text='', anchor=CENTER)
+sam_tree.heading('File', text='File', anchor=CENTER)
+sam_tree.heading('RA', text = 'RA' ,anchor=CENTER)
+sam_tree.heading('Likelihood',text='Likelihood', anchor=CENTER)                
+sam_tree.grid(row=0,column=0, rowspan = 5)
+
+'''Widgets in the results frame'''
+#Tree View Headache
+columns2 = ["Sample", "Avg RA", "StDv RA", "Avg Likelihood", "StDv Likelihood"]
+res_tree = ttk.Treeview(resultsframe, columns=columns2)
+res_tree.column('#0', width=0, stretch=NO)
+res_tree.column('Sample', anchor=CENTER, width=200)
+res_tree.column('Avg RA', anchor=CENTER, width=80)
+res_tree.column('StDv RA', anchor=CENTER, width=80)
+res_tree.column('Avg Likelihood', anchor=CENTER, width=80)
+res_tree.column('StDv Likelihood', anchor=CENTER, width=80)
+res_tree.heading('#0', text='', anchor=CENTER)
+res_tree.heading('Sample', text='Sample', anchor=CENTER)
+res_tree.heading('Avg RA', text='Avg RA', anchor=CENTER)
+res_tree.heading('StDv RA', text='StDv RA', anchor=CENTER)
+res_tree.heading('Avg Likelihood', text='Avg Likelihood', anchor=CENTER)
+res_tree.heading('StDv Likelihood', text='StDv Likelihood', anchor=CENTER)
+res_tree.grid(row=0, column=0)
 
 
 #establishes the mainloop of the tkinter root
-#root.mainloop()
+root.mainloop()
