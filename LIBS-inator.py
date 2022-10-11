@@ -35,6 +35,7 @@ from PIL import Image as IM
 from PIL import ImageDraw as ID
 from PIL import ImageFont as IF
 
+import matplotlib.pyplot as plt
 
 #BEGIN CODE
 
@@ -44,16 +45,6 @@ cd = os.getcwd()
 
 #empty save directory
 savedir = ''
-
-#Condition Checker. 0 if not met, 1 if met
-CC = [0,0,0,0]
-
-'''
-1. directory chosen?
-2. save directory chosen?
-3. Target WL?
-4. WL width?
-'''
 
 #establish root for tkinter
 root = Tk()
@@ -65,6 +56,7 @@ selectionframe = Frame(root)
 elementframe = Frame(root)
 samplesframe = Frame(root)
 resultsframe = Frame(root)
+graphframe = Frame(root)
 
 
 #Place Frames
@@ -72,6 +64,7 @@ selectionframe.grid(row=0, column=0)
 elementframe.grid(row=0, column=1)
 samplesframe.grid(row=1, column=0)
 resultsframe.grid(row=1, column=1)
+graphframe.grid(row=2,column=0)
 
 '''
 Start commands here
@@ -136,6 +129,10 @@ def Stats():
     global SD_label
     global select
     global res_tree
+    global avgavg_label
+    global stavg_label
+    global avgstd_label
+    global ststd_label
     
     #refreshes the files list
     files = os.listdir(directory)
@@ -248,11 +245,42 @@ def Stats():
                                           str(statistics.mean(Lklist[i]))[0:5],
                                           str(statistics.stdev(Lklist[i]))[0:5]))
                                     
-        res_tree.grid(row=0,column=0)
+        res_tree.grid(row=0,column=0,rowspan=4)
                 
         #counts up the index
         index = index+1
         iid = iid+1
+        
+    #updates AVGAVG label
+    avgavg_label.grid_forget()
+    
+    #takes average of averages
+    RAlist2 = []
+    for i in range(len(RAlist)):
+        RAlist2.append(statistics.mean(RAlist[i]))
+        
+    #Takes stdev
+    RAlist3 = []
+    for i in range(len(RAlist)):
+        RAlist3.append(statistics.stdev(RAlist[i]))
+    
+    avgavg_label = Label(resultsframe, text="Average of Averages: " + str(statistics.mean(RAlist2))[0:5])
+    avgavg_label.grid(row=0, column=1)
+    
+    #updates STAVG label
+    stavg_label.grid_forget()
+    stavg_label = Label(resultsframe, text="StDev of Averages: " + str(statistics.stdev(RAlist2))[0:5])
+    stavg_label.grid(row=1, column=1)
+    
+    #updates AvgStd label
+    avgstd_label.grid_forget()
+    avgstd_label = Label(resultsframe, text="Average of StDevs: " + str(statistics.mean(RAlist3))[0:5])
+    avgstd_label.grid(row=2, column=1)
+    
+    #updates var label
+    ststd_label.grid_forget()
+    ststd_label = Label(resultsframe, text="StDev of StDevs: " + str(statistics.stdev(RAlist3))[0:5])
+    ststd_label.grid(row=3, column=1)
     return
 
 #updates program depeneding on the selected element
@@ -314,6 +342,76 @@ def selectElement(selection):
     #enables the Test Button
     test_btn['state'] = NORMAL
     return
+
+#Creates and displays graphs as called
+def Graph():
+    
+    #global variables
+    global files
+    global directory
+    
+    #empty filter list
+    tobedel = []
+    
+    #check filter
+    if fil_var.get() in ("f", "m", "q", "b"):
+        
+        #if filter not found, mark to be removed from list
+        for i in range(len(files)):
+            if "("+fil_var.get()+")" not in files[i]:
+                tobedel.append(files[i])
+        #removing from files list
+        for i in range(len(tobedel)):
+            files.remove(tobedel[i])
+    
+    #empty complex lists
+    samlist = []
+    RAlist = []
+    Lklist = []
+    
+    #see if every sample name already is counted or not
+    for i in range(len(files)):
+        
+        checkvar = ''
+        for j in range(len(files[i])):
+            
+            #limits just to the underscore
+            if files[i][j] != "_":
+                checkvar = checkvar + files[i][j]
+            if files[i][j] == "_":
+                break
+        
+        #if not in sample list, add it
+        if checkvar not in samlist:
+            samlist.append(checkvar)
+            
+    #Creates empty lists of lists for RA and Likelihood of each sample    
+    for i in range(len(samlist)):
+        RAlist.append([])
+        Lklist.append([])
+        
+        #For every file in the folder check to see which sample it corresponds to
+        for j in range(len(files)):
+            if samlist[i] in files[j]:
+                tempfile = pd.read_csv(directory+'/'+files[j])
+                
+                #add the values of that test to its corresponding sample in the sample lists
+                for k in range(len(tempfile["Element"])):
+                    if tempfile['Element'][k] == select:
+                        RAlist[i].append(float(tempfile["RA"][k]))
+                        Lklist[i].append(float(tempfile['Likelihood'][k]))
+                        
+    RAavg = []
+    LKavg = []
+    
+    for i in range(len(RAlist)):
+        RAavg.append(statistics.mean(RAlist[i]))
+        LKavg.append(statistics.mean(Lklist[i]))
+        
+    plt.scatter(x=RAavg, y=LKavg)
+    plt.show
+    return
+    
 
 '''Widgets for selection frame'''
 #Create Labels in selection frame
@@ -397,6 +495,19 @@ sam_tree.heading('Likelihood',text='Likelihood', anchor=CENTER)
 sam_tree.grid(row=0,column=0, rowspan = 5)
 
 '''Widgets in the results frame'''
+#creates Labels in results frame
+avgavg_label = Label(resultsframe, text='Average of Averages:')
+stavg_label = Label(resultsframe, text='StDev of Averages:')
+avgstd_label = Label(resultsframe, text='Average of StDevs:')
+ststd_label = Label(resultsframe, text='StDev of StDev:')
+
+#places labels in results frame
+avgavg_label.grid(row=0, column=1)
+stavg_label.grid(row=1, column=1)
+avgstd_label.grid(row=2, column=1)
+ststd_label.grid(row=3, column=1)
+
+
 #Tree View Headache
 columns2 = ["Sample", "Avg RA", "StDv RA", "Avg Likelihood", "StDv Likelihood"]
 res_tree = ttk.Treeview(resultsframe, columns=columns2)
@@ -412,7 +523,11 @@ res_tree.heading('Avg RA', text='Avg RA', anchor=CENTER)
 res_tree.heading('StDv RA', text='StDv RA', anchor=CENTER)
 res_tree.heading('Avg Likelihood', text='Avg Likelihood', anchor=CENTER)
 res_tree.heading('StDv Likelihood', text='StDv Likelihood', anchor=CENTER)
-res_tree.grid(row=0, column=0)
+res_tree.grid(row=0, column=0, rowspan=4)
+
+'''Widgets in graph frame'''
+test = Button(graphframe, text="Test", command=Graph)
+test.grid(row=0,column=0)
 
 
 #establishes the mainloop of the tkinter root
